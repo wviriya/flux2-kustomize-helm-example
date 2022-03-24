@@ -1,0 +1,32 @@
+# Register Azure providers
+az provider register --namespace Microsoft.Kubernetes
+az provider register --namespace Microsoft.ContainerService
+az provider register --namespace Microsoft.KubernetesConfiguration
+
+# Install extension
+az extension add -n k8s-configuration
+az extension add -n k8s-extension
+
+$AKS_CLUSTER_NAME='aksCluster3'
+$RESOURCE_GROUP='aks-rg'
+$CONFIG_REPO='https://github.com/wviriya/flux2-kustomize-helm-example'
+
+# Create an AKS cluster with default settings and managed idenity enabled
+az aks create -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --node-count 1 #--enable-managed-identity
+
+# Enable Secrets CSI Driver 
+az aks enable-addons --addons azure-keyvault-secrets-provider --name $AKS_CLUSTER_NAME --resource-group $RESOURCE_GROUP
+
+# Enable Flux for GitOps
+az k8s-configuration flux create -g $RESOURCE_GROUP -c $AKS_CLUSTER_NAME \
+-n flux-demo -t managedClusters --kind git \
+--namespace gitops --scope cluster --url $CONFIG_REPO --branch main \
+--kustomization name=infra path=./infrastructure prune=true \
+--kustomization name=apps path=./apps/staging prune=true depends_on="infra"
+
+
+az k8s-extension list -g $RESOURCE_GROUP -c $AKS_CLUSTER_NAME -t managedClusters
+az k8s-configuration list -g $RESOURCE_GROUP -c $AKS_CLUSTER_NAME -t managedClusters
+
+az k8s-extension delete -g $RESOURCE_GROUP -c $AKS_CLUSTER_NAME -t managedClusters -n flux
+az k8s-configuration flux delete -g $RESOURCE_GROUP -c $AKS_CLUSTER_NAME -t managedClusters -n flux-demo 
